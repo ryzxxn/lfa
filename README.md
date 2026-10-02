@@ -106,13 +106,31 @@ npm run -w controller dev invoke hello '{"name":"World"}'
 ✅ **Framework-agnostic** — Use any libraries you want  
 ✅ **Self-contained** — No external dependencies required at runtime
 
+## Execution Modes
+
+The runtime supports two execution modes:
+
+### 1. **Lightweight Node.js** (Default)
+- Fast cold starts (5-20ms)
+- Low memory overhead
+- Great for development and testing
+- Single-tenant execution
+
+### 2. **Firecracker VMs**
+- Secure hardware isolation (KVM)
+- Multi-tenant capability
+- Slightly higher cold start (50-200ms)
+- Production-grade security
+- See [Firecracker Integration Guide](FIRECRACKER_INTEGRATION.md)
+
 ## Future Enhancements
 
-- [ ] True Firecracker VM integration (currently using Node.js processes)
-- [ ] Custom Linux rootfs with minimal size
+- [ ] Copy Node.js into Firecracker rootfs
+- [ ] Network interface support
+- [ ] vsock communication for function I/O
+- [ ] VM snapshots for faster cold starts
 - [ ] Memory/CPU limits per function
 - [ ] Concurrent invocations with pooling
 - [ ] HTTP API server
 - [ ] Persistent storage support
 - [ ] Function logs and metrics
-- [ ] Cold start optimization
