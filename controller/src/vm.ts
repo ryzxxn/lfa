@@ -61,10 +61,12 @@ export class FirecrackerVM {
         payload: request,
       });
 
+      const runtimePath = path.join(__dirname, "../../runtime/dist/index.js");
+
       const nodeProcess = spawn(
         "node",
         [
-          path.join(__dirname, "../../../runtime/dist/index.js"),
+          runtimePath,
           bundlePath,
           requestJson,
         ],

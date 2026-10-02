@@ -1,6 +1,7 @@
 {
   "name": "@firecracker-lambda/bundler",
   "version": "0.1.0",
+  "main": "dist/bundler.js",
   "bin": {
     "bundle-function": "dist/cli.js"
   },

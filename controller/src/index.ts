@@ -23,12 +23,33 @@ export interface InvocationResponse {
 export class FunctionController {
   private deployments: Map<string, string> = new Map();
   private deploymentDir: string;
+  private registryPath: string;
 
   constructor(deploymentDir?: string) {
     this.deploymentDir = deploymentDir || path.join(os.tmpdir(), "fc-deployments");
+    this.registryPath = path.join(this.deploymentDir, "registry.json");
+
     if (!fs.existsSync(this.deploymentDir)) {
       fs.mkdirSync(this.deploymentDir, { recursive: true });
     }
+
+    this.loadRegistry();
+  }
+
+  private loadRegistry(): void {
+    if (fs.existsSync(this.registryPath)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(this.registryPath, "utf-8"));
+        this.deployments = new Map(Object.entries(data));
+      } catch (error) {
+        console.warn("Failed to load registry, starting fresh");
+      }
+    }
+  }
+
+  private saveRegistry(): void {
+    const data = Object.fromEntries(this.deployments);
+    fs.writeFileSync(this.registryPath, JSON.stringify(data, null, 2));
   }
 
   async deploy(config: DeploymentConfig): Promise<string> {
@@ -43,6 +64,7 @@ export class FunctionController {
     });
 
     this.deployments.set(config.name, bundlePath);
+    this.saveRegistry();
     console.log(`✅ Deployed ${config.name}`);
 
     return bundlePath;
