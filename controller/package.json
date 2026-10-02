@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "main": "dist/index.js",
   "bin": {
-    "firecracker-lambda": "dist/cli.js"
+    "firecracker-lambda": "dist/cli.js",
+    "firecracker-lambda-server": "dist/server-cli.js"
   },
   "scripts": {
     "build": "tsc",
