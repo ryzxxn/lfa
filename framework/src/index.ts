@@ -37,3 +37,7 @@ export async function invoke(
     };
   }
 }
+
+// Lazy loading for external modules
+export { lazyLoad, lazyLoadMultiple, clearModuleCache, declareExternalModules } from "./lazy-loader";
+export type { ModuleMetadata } from "./lazy-loader";
