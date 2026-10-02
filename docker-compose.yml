@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  # Development environment (works on Mac/Linux)
+  dev:
+    build: .
+    container_name: firecracker-lambda-dev
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    command: npm run -w controller dev help
+    ports:
+      - "3000:3000"
+
+  # Firecracker environment (Linux only)
+  firecracker:
+    build:
+      context: .
+      dockerfile: Dockerfile.firecracker
+    container_name: firecracker-lambda-prod
+    privileged: true  # Required for KVM
+    volumes:
+      - ./examples:/app/examples:ro
+      - firecracker-tmp:/tmp
+      - ./dist:/app/dist:ro
+    environment:
+      - FIRECRACKER_BIN=/usr/local/bin/firecracker
+      - FIRECRACKER_KERNEL=/app/kernels/vmlinux-5.10
+    command: npm run -w controller dev help
+    platforms:
+      - linux/amd64
+      - linux/arm64
+
+volumes:
+  firecracker-tmp:
+    driver: local

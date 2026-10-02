@@ -1,0 +1,53 @@
+FROM ubuntu:22.04
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    build-essential \
+    nodejs \
+    npm \
+    kvm \
+    qemu-kvm \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy project
+COPY . .
+
+# Install Node dependencies
+RUN npm ci
+
+# Build all packages
+RUN npm run build
+
+# Download Firecracker
+ARG FIRECRACKER_VERSION=v1.8.0
+RUN wget -O /usr/local/bin/firecracker \
+    https://github.com/firecracker-microvm/firecracker/releases/download/${FIRECRACKER_VERSION}/firecracker-${FIRECRACKER_VERSION}-x86_64 && \
+    chmod +x /usr/local/bin/firecracker
+
+# Download minimal Linux kernel
+RUN mkdir -p /app/kernels && \
+    wget -O /app/kernels/vmlinux-5.10 \
+    https://s3.amazonaws.com/firecracker-downloads/linux/5.10/x86_64/vmlinux-5.10
+
+# Create non-root user with KVM access
+RUN useradd -m -G kvm firecracker && \
+    chown -R firecracker:firecracker /app
+
+USER firecracker
+
+# Set environment
+ENV FIRECRACKER_BIN=/usr/local/bin/firecracker
+ENV FIRECRACKER_KERNEL=/app/kernels/vmlinux-5.10
+
+# Health check
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+    CMD firecracker --version || exit 1
+
+# Entry point
+ENTRYPOINT ["npm", "run", "-w", "controller", "dev"]
+CMD ["help"]

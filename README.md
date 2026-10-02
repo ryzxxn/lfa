@@ -1,6 +1,8 @@
 # Firecracker Lambda
 
-A self-managed serverless function runtime using Firecracker as the underlying lightweight virtual machine platform.
+A self-managed serverless function runtime with dual execution modes:
+- **Local (macOS/Linux):** Lightweight Node.js execution for rapid development
+- **Production (Linux):** Firecracker VM isolation for secure multi-tenant workloads
 
 ## Architecture
 
@@ -82,7 +84,7 @@ The controller:
 - Returns the result immediately
 - Cleans up resources automatically
 
-## Development
+## Quick Start (macOS)
 
 ```bash
 # Install dependencies
@@ -91,11 +93,38 @@ npm install
 # Build all packages
 npm run build
 
-# Run examples
-npm run -w controller dev help
+# Deploy a function (Node.js mode - works on any OS)
 npm run -w controller dev deploy hello examples/hello.ts
+
+# Invoke it
 npm run -w controller dev invoke hello '{"name":"World"}'
 ```
+
+Expected output:
+```json
+{
+  "result": {
+    "message": "Hello, World!",
+    "timestamp": "2024-10-03T..."
+  },
+  "duration": 42
+}
+```
+
+**On macOS?** You're done! Node.js mode works perfectly for development.
+
+**On Linux with KVM?** See [Firecracker Integration](FIRECRACKER_INTEGRATION.md) to enable VM isolation.
+
+## Deployment
+
+- **Development (Mac/Linux):** Node.js mode (5-20ms cold start)
+- **Production (Linux servers):** Firecracker mode (50-200ms, isolated)
+
+See [Deployment Guide](DEPLOYMENT_GUIDE.md) for:
+- Cross-platform workflow
+- CI/CD pipeline setup
+- Testing Firecracker on Mac with Docker
+- Production deployment options
 
 ## Key Features
 
