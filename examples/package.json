@@ -1,0 +1,11 @@
+{
+  "name": "@firecracker-lambda/examples",
+  "version": "0.1.0",
+  "private": true,
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@firecracker-lambda/framework": "^0.1.0"
+  }
+}

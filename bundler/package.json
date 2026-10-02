@@ -1,0 +1,17 @@
+{
+  "name": "@firecracker-lambda/bundler",
+  "version": "0.1.0",
+  "bin": {
+    "bundle-function": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "esbuild": "^0.19.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "@types/node": "^20.0.0"
+  }
+}

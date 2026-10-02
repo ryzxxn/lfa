@@ -1,0 +1,21 @@
+{
+  "name": "@firecracker-lambda/controller",
+  "version": "0.1.0",
+  "main": "dist/index.js",
+  "bin": {
+    "firecracker-lambda": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/cli.ts"
+  },
+  "dependencies": {
+    "@firecracker-lambda/bundler": "^0.1.0",
+    "@firecracker-lambda/framework": "^0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0"
+  }
+}
