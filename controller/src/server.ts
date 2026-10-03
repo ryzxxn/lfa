@@ -1,6 +1,9 @@
 import * as http from "http";
 import * as url from "url";
+import * as fs from "fs";
+import * as path from "path";
 import { FunctionController } from "./index";
+import { SimpleMetricsCollector } from "./simple-metrics";
 
 interface ApiRequest {
   method: string;
@@ -19,10 +22,12 @@ export class APIServer {
   private controller: FunctionController;
   private server: http.Server;
   private port: number;
+  private metrics: SimpleMetricsCollector;
 
   constructor(port: number = 3000, deploymentDir?: string) {
     this.port = port;
     this.controller = new FunctionController(deploymentDir);
+    this.metrics = new SimpleMetricsCollector();
     this.server = http.createServer(this.handleRequest.bind(this));
   }
 
@@ -64,31 +69,59 @@ export class APIServer {
   private async route(req: ApiRequest): Promise<ApiResponse> {
     const { method, pathname } = req;
 
-    // Deploy function: POST /deploy
-    if (method === "POST" && pathname === "/deploy") {
+    // Dashboard: GET /
+    if (method === "GET" && pathname === "/") {
+      try {
+        const dashboardPath = path.join(__dirname, "dashboard.html");
+        const html = fs.readFileSync(dashboardPath, "utf-8");
+        return {
+          statusCode: 200,
+          headers: { "Content-Type": "text/html" },
+          body: html,
+        };
+      } catch {
+        return {
+          statusCode: 200,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: "Firecracker Lambda API",
+            version: "0.1.0",
+            message: "Dashboard not available",
+          }),
+        };
+      }
+    }
+
+    // Deploy function: POST /api/functions/deploy
+    if (method === "POST" && pathname === "/api/functions/deploy") {
       try {
         const body = JSON.parse(req.body);
-        const { name, source } = body as { name: string; source: string };
+        const { name, code, env } = body as {
+          name: string;
+          code: string;
+          env?: Record<string, string>;
+        };
 
-        if (!name || !source) {
+        if (!name || !code) {
           return {
             statusCode: 400,
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ error: "Missing name or source" }),
+            body: JSON.stringify({ error: "Missing name or code" }),
           };
         }
 
-        const bundlePath = await this.controller.deploy({
+        const functionId = await this.controller.deployInline({
           name,
-          sourceFile: source,
+          code,
+          env: env || {},
         });
 
         return {
           statusCode: 201,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            functionId,
             name,
-            bundlePath,
             message: `Deployed ${name}`,
           }),
         };
@@ -103,19 +136,77 @@ export class APIServer {
       }
     }
 
-    // Invoke function: POST /invoke/:name
-    if (method === "POST" && pathname.startsWith("/invoke/")) {
-      const name = pathname.replace("/invoke/", "");
+    // List functions: GET /api/functions
+    if (method === "GET" && pathname === "/api/functions") {
+      const functions = this.controller.list();
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          functions.map((fn) => ({
+            id: fn.id || fn.name,
+            name: fn.name || fn.id,
+            deployedAt: fn.deployedAt,
+          }))
+        ),
+      };
+    }
+
+    // Delete function: DELETE /api/functions/:id
+    if (method === "DELETE" && pathname.startsWith("/api/functions/")) {
+      const id = pathname.replace("/api/functions/", "");
+      try {
+        this.controller.delete(id);
+        return {
+          statusCode: 200,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: "Deleted" }),
+        };
+      } catch (error) {
+        return {
+          statusCode: 400,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            error: error instanceof Error ? error.message : "Delete failed",
+          }),
+        };
+      }
+    }
+
+    // Invoke function: POST /api/invoke/:name
+    if (method === "POST" && pathname.startsWith("/api/invoke/")) {
+      const name = pathname.replace("/api/invoke/", "");
 
       try {
-        const payload = req.body ? JSON.parse(req.body) : {};
-        const response = await this.controller.invoke(name, { payload });
+        const startTime = Date.now();
+        const body = JSON.parse(req.body);
+        const { payload, env } = body as {
+          payload: any;
+          env?: Record<string, string>;
+        };
 
-        const statusCode = response.error ? 400 : 200;
+        const result = await this.controller.invoke(name, {
+          payload,
+          env: env || {},
+        });
+
+        const duration = Date.now() - startTime;
+
+        this.metrics.recordMetric({
+          functionId: name,
+          invocationId: `inv-${Date.now()}`,
+          duration,
+          timestamp: Date.now(),
+          status: result.error ? "error" : "success",
+          coldStart: false,
+          errorMessage: result.error,
+        });
+
+        const statusCode = result.error ? 400 : 200;
         return {
           statusCode,
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(response),
+          body: JSON.stringify(result),
         };
       } catch (error) {
         return {
@@ -128,61 +219,33 @@ export class APIServer {
       }
     }
 
-    // List functions: GET /list
-    if (method === "GET" && pathname === "/list") {
-      const functions = this.controller.list();
-      return {
-        statusCode: 200,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          functions,
-          count: functions.length,
-        }),
-      };
+    // Get metrics: GET /api/metrics/functions/:id/stats
+    if (method === "GET" && pathname.startsWith("/api/metrics/functions/")) {
+      const parts = pathname.split("/");
+      const functionId = parts[4];
+
+      if (pathname.includes("/stats")) {
+        const stats = this.metrics.getQuickStats(functionId);
+        return {
+          statusCode: 200,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            functionId,
+            timestamp: Date.now(),
+            stats,
+          }),
+        };
+      }
     }
 
-    // Health check: GET /health
-    if (method === "GET" && pathname === "/health") {
+    // Health check: GET /api/health
+    if (method === "GET" && pathname === "/api/health") {
       return {
         statusCode: 200,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           status: "ok",
           timestamp: new Date().toISOString(),
-        }),
-      };
-    }
-
-    // API docs: GET /
-    if (method === "GET" && pathname === "/") {
-      return {
-        statusCode: 200,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "Firecracker Lambda API",
-          version: "0.1.0",
-          endpoints: {
-            "GET /": "This help message",
-            "GET /health": "Health check",
-            "GET /list": "List deployed functions",
-            "POST /deploy": "Deploy a function (body: {name, source})",
-            "POST /invoke/:name": "Invoke a function (body: payload)",
-          },
-          examples: {
-            deploy: {
-              method: "POST",
-              url: "http://localhost:3000/deploy",
-              body: {
-                name: "hello",
-                source: "/path/to/hello.ts",
-              },
-            },
-            invoke: {
-              method: "POST",
-              url: "http://localhost:3000/invoke/hello",
-              body: { name: "World" },
-            },
-          },
         }),
       };
     }
@@ -201,11 +264,12 @@ export class APIServer {
     return new Promise((resolve) => {
       this.server.listen(this.port, () => {
         console.log(`🚀 Firecracker Lambda API listening on http://localhost:${this.port}`);
-        console.log(`   GET  http://localhost:${this.port}/           (API docs)`);
-        console.log(`   GET  http://localhost:${this.port}/health     (Health check)`);
-        console.log(`   GET  http://localhost:${this.port}/list       (List functions)`);
-        console.log(`   POST http://localhost:${this.port}/deploy     (Deploy function)`);
-        console.log(`   POST http://localhost:${this.port}/invoke/:name (Invoke function)`);
+        console.log(`   GET  http://localhost:${this.port}/                              (Dashboard)`);
+        console.log(`   GET  http://localhost:${this.port}/api/health                   (Health check)`);
+        console.log(`   GET  http://localhost:${this.port}/api/functions                (List functions)`);
+        console.log(`   POST http://localhost:${this.port}/api/functions/deploy         (Deploy function)`);
+        console.log(`   POST http://localhost:${this.port}/api/invoke/:name             (Invoke function)`);
+        console.log(`   GET  http://localhost:${this.port}/api/metrics/functions/:id/stats (Metrics)`);
         resolve();
       });
     });

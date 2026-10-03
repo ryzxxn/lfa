@@ -8,7 +8,9 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "ts-node src/cli.ts"
+    "dev": "ts-node src/cli.ts",
+    "start": "node dist/server-cli.js",
+    "dev-server": "ts-node src/server-cli.ts"
   },
   "dependencies": {
     "@firecracker-lambda/bundler": "^0.1.0",

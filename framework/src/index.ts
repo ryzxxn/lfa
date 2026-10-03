@@ -13,8 +13,22 @@ export interface FunctionResponse {
 
 export type Handler = (payload: Record<string, any>) => Promise<any>;
 
+let _currentPayload: Record<string, any> = {};
+
 export function defineHandler(handler: Handler): Handler {
-  return handler;
+  return async (payload: Record<string, any>) => {
+    _currentPayload = payload;
+    return handler(payload);
+  };
+}
+
+/**
+ * Get environment variables injected during invocation
+ * Usage: const apiKey = getEnv("API_KEY")
+ */
+export function getEnv(key: string, defaultValue?: string): string | undefined {
+  const env = _currentPayload?.__env || process.env;
+  return env[key] || defaultValue;
 }
 
 export async function invoke(
